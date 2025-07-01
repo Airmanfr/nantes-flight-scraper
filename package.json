@@ -1,0 +1,13 @@
+{
+  "name": "nantes-flight-scraper",
+  "version": "1.0.0",
+  "main": "scrape-flights.js",
+  "scripts": {
+    "start": "node scrape-flights.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^21.3.8",
+    "axios": "^1.6.8"
+  }
+}
