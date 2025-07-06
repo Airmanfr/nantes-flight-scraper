@@ -5,9 +5,13 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Fonction générique de scraping
+// Fonction de scraping générique
 const scrapeFlights = async (url, type) => {
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
   const page = await browser.newPage();
   await page.goto(url, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.card-flight__top', { timeout: 5000 });
@@ -59,7 +63,7 @@ const scrapeFlights = async (url, type) => {
   return resultsWithDate;
 };
 
-// Endpoint pour récupérer les vols triés
+// Endpoint pour afficher tous les vols
 app.get('/flights', async (req, res) => {
   try {
     const urlDepart = 'https://www.nantes.aeroport.fr/fr/trouvez-votre-destination/vols-au-depart';
@@ -89,48 +93,40 @@ app.get('/flights', async (req, res) => {
 app.get('/quiet-slots', async (req, res) => {
   try {
     const now = new Date();
-
     const response = await axios.get(`http://localhost:${PORT}/flights`);
     const vols = response.data.vols;
 
-    // 🔍 Fonction de nettoyage des chaînes de caractères (heure/date)
-    const clean = (str) => str?.trim().replace(/\u200B/g, '');
-
     const volsAvecDatetime = vols
-      .filter(v => /^\d{2}:\d{2}$/.test(clean(v.heure)) && v.date)
-      .map(v => {
-        const heure = clean(v.heure);
-        const date = clean(v.date);
-        const datetime = new Date(`${date}T${heure}:00`);
-        return { ...v, datetime };
-      })
+      .filter(v => /^\d{2}:\d{2}$/.test(v.heure))
+      .map(v => ({
+        ...v,
+        datetime: new Date(`${v.date}T${v.heure}:00`)
+      }))
       .filter(v => v.datetime >= now)
       .sort((a, b) => a.datetime - b.datetime);
 
     const quietSlots = [];
-
     for (let i = 1; i < volsAvecDatetime.length; i++) {
       const prev = volsAvecDatetime[i - 1].datetime;
       const next = volsAvecDatetime[i].datetime;
       const diff = (next - prev) / 60000;
-
       if (diff >= 30) {
         quietSlots.push({
-          debut: prev.toISOString().slice(0, 16).replace('T', ' '),
-          fin: next.toISOString().slice(0, 16).replace('T', ' '),
+          debut: prev.toISOString().replace('T', ' ').slice(0, 16),
+          fin: next.toISOString().replace('T', ' ').slice(0, 16),
           duree: Math.floor(diff)
         });
       }
     }
 
-    // 🕓 Créneau avant le premier vol
+    // Slot de maintenant au prochain vol
     if (volsAvecDatetime.length > 0) {
       const first = volsAvecDatetime[0].datetime;
       const diff = (first - now) / 60000;
       if (diff >= 30) {
         quietSlots.unshift({
-          debut: now.toISOString().slice(0, 16).replace('T', ' '),
-          fin: first.toISOString().slice(0, 16).replace('T', ' '),
+          debut: now.toISOString().replace('T', ' ').slice(0, 16),
+          fin: first.toISOString().replace('T', ' ').slice(0, 16),
           duree: Math.floor(diff)
         });
       }
@@ -138,12 +134,12 @@ app.get('/quiet-slots', async (req, res) => {
 
     res.json({ quietSlots });
   } catch (error) {
-    console.error('Erreur dans /quiet-slots :', error);
-    res.status(500).json({ message: 'Erreur lors du calcul des créneaux de silence.' });
+    console.error(error);
+    res.status(500).json({ message: "Erreur lors du calcul des créneaux." });
   }
 });
 
 // Lancer le serveur
 app.listen(PORT, () => {
-  console.log(`Serveur démarré sur http://localhost:${PORT}`);
+  console.log(`✅ Serveur Node.js en ligne sur le port ${PORT}`);
 });
