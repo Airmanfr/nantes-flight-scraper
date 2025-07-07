@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const puppeteer = require('puppeteer');
 const axios = require('axios');
@@ -93,7 +95,8 @@ app.get('/flights', async (req, res) => {
 app.get('/quiet-slots', async (req, res) => {
   try {
     const now = new Date();
-    const response = await axios.get(`http://localhost:${PORT}/flights`);
+    const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+    const response = await axios.get(`${baseUrl}/flights`);
     const vols = response.data.vols;
 
     const volsAvecDatetime = vols
